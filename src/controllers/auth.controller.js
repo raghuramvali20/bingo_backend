@@ -1,41 +1,43 @@
 import User from "../models/User.model.js";
 import { generateToken } from "../config/jwt.js";
 
-export const socialLogin = async (req, res) => {
-    try{
-        const {displayName, email, avatar, googleId, facebookId} = req.body;
-
-        let user = await User.findOne({email});
-        
-        //check user
-        if(user){
-            //if they exist update their social id
-            if(googleId) user.googleId = googleId;
-            if(facebookId) user.facebookId = facebookId;
-            user.avatar = avatar;
-            await user.save();
-        }
-        else{
-            // if user not exists create a new user
-            user = await User.create({
-                displayName,
-                email,
-                avatar,
-                googleId,
-                facebookId,
-            })
+export const signUp = async (req, res) => {
+    try {
+        const { displayName, email, password }= req.body;
+        if (!displayName || !email || !password) {
+            return res.status(400).json({ success: false, message: "Missing required fields" });
         }
 
+        const existing = await User.findOne({ email });
+        if (existing) {
+            return res.status(409).json({ success: false, message: "Email already in use" });
+        }
+
+        const user = await User.create({ displayName, email, password });
         const token = generateToken(user._id);
 
-        res.status(200).json({
-            success: true,
-            message: "Login successful",
-            user,
-            token
-        })
+        res.status(201).json({ success: true, message: "Account created", user, token });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
 
-    }catch (error) {
-        res.status(500).json({success: false, message: error.message});
+export const login = async (req, res) => {
+    try {
+        const { email, password } = req.body;
+        if (!email || !password) {
+            return res.status(400).json({ success: false, message: "Missing email or password" });
+        }
+
+        const user = await User.findOne({ email });
+        if (!user) return res.status(401).json({ success: false, message: "Invalid credentials" });
+
+        const isMatch = await user.comparePassword(password);
+        if (!isMatch) return res.status(401).json({ success: false, message: "Invalid credentials" });
+
+        const token = generateToken(user._id);
+        res.status(200).json({ success: true, message: "Login successful", user, token });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
     }
 };

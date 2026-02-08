@@ -1,13 +1,14 @@
 import mongoose from "mongoose";
+import bcrypt from "bcryptjs";
+
+const SALT_WORK_FACTOR = 10;
 
 const userSchema = new mongoose.Schema(
     {
         displayName: { type: String, required: true },
         email: { type: String, required: true, unique: true },
-        avatar: { type: String },
+        password: { type: String },
 
-        googleId: { type: String, sparse: true, unique: true }, 
-        facebookId: { type: String, sparse: true, unique: true },
 
         // Current Friends (Both Facebook and Manual)
         friends: [{
@@ -15,7 +16,7 @@ const userSchema = new mongoose.Schema(
             ref: "User"
         }],
 
-        // NEW: Handle incoming friend requests
+        // Handle incoming friend requests
         friendRequests: [{
             from: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
             status: { 
@@ -26,7 +27,7 @@ const userSchema = new mongoose.Schema(
             sentAt: { type: Date, default: Date.now }
         }],
 
-        coins: { type: Number, default: 500 }, // Give them 500 to start!
+        coins: { type: Number, default: 500 },
 
         stats: {
             gamesPlayed: { type: Number, default: 0 },
@@ -41,6 +42,22 @@ const userSchema = new mongoose.Schema(
     },
     { timestamps: true }
 );
+
+userSchema.pre("save", async function(next) {
+    if (!this.isModified("password")) return next();
+    try {
+        const salt = await bcrypt.genSalt(SALT_WORK_FACTOR);
+        this.password = await bcrypt.hash(this.password, salt);
+        return next();
+    } catch (err) {
+        return next(err);
+    }
+});
+
+userSchema.methods.comparePassword = async function(candidatePassword) {
+    if (!this.password) return false;
+    return bcrypt.compare(candidatePassword, this.password);
+};
 
 const User = mongoose.model("User", userSchema);
 export default User;
